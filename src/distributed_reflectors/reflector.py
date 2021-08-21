@@ -1,6 +1,8 @@
 # import math
 # import time
 
+from typing import Tuple
+
 import numpy as np
 
 # from cma import fmin
@@ -11,7 +13,7 @@ PI = np.pi
 
 
 class Reflector:
-    def __init__(self, length, coordinates: np.ndarray):
+    def __init__(self, length, coordinates: np.ndarray) -> None:
         self.L = length
         self.x = coordinates[0]
         self.y = coordinates[1]
@@ -20,17 +22,119 @@ class Reflector:
         self.dtheta_cm = None
         self.dtheta_r = None
 
-    def set_angle(self, angle):
+    def set_angle(self, angle) -> None:
         self.angle = np.mod(angle, PI)
         return self
 
-    def will_collide(self, particle_coordinates):
+    def will_collide(self, particle_coordinates: np.ndarray) -> np.ndarray:
 
         particles_x, particles_y, particles_angles = parse_coordinates(
             particle_coordinates
         )
 
-        # calculate displacement distance and angles
+        # calculate displacement distance and angles and rotate system
+        self._calc_displacement_distance_and_angle(particles_x, particles_y)
+
+        # rotate system with resepct to each particle angle
+        self._calc_rotated_angles(particles_angles)
+
+        # calculate the y coordinates of the upper and lower edges of the reflectors - after rotation
+        self._calc_positions_of_rotated_reflector_edges()
+
+        # check if the reflector intercepts the positive x half-plane
+        # since we rotated the system such that each particle is moving in the +x direction AND centered it in (0,0)
+        # if the reflector intercepts the positive x half-plane, this means the particle will intercept it
+        reflector_intercepts_positive_x_plane = np.logical_and(
+            (self.y_of_upper_reflector_edge > 0), (self.y_of_lower_reflector_edge < 0)
+        )
+        particle_collisions = reflector_intercepts_positive_x_plane.astype(int)
+
+        return particle_collisions
+
+    def get_new_coordinates(
+        self, particle_coordinates: np.ndarray, particle_collisions: np.ndarray
+    ) -> np.ndarray:
+
+        # get only the indicies and angles for the particles which collided with this reflector
+        collided_particles_idx = np.nonzero(particle_collisions)[0]
+        new_particle_coordinates = np.copy(particle_coordinates)
+
+        if len(collided_particles_idx) > 0:
+            # get only the particle coordinates that collided
+            particles_x, particles_y, particles_angles = parse_coordinates(
+                particle_coordinates, collided_particles_idx
+            )
+
+            # calculate the new coordinates for the particles that collided
+            x_new, y_new = self._calc_new_xy(
+                particles_x, particles_y, particles_angles, collided_particles_idx
+            )
+            angle_new = self._calc_new_angle(particles_angles, collided_particles_idx)
+
+            # set the new particle coordinates
+            new_particle_coordinates[collided_particles_idx, 0] = x_new
+            new_particle_coordinates[collided_particles_idx, 1] = y_new
+            new_particle_coordinates[collided_particles_idx, 2] = angle_new
+
+        return new_particle_coordinates
+
+    def _calc_new_xy(
+        self,
+        particles_x: np.ndarray,
+        particles_y: np.ndarray,
+        particles_angles: np.ndarray,
+        collided_particles_idx: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+
+        # calculate the displaced and rotated new x and y (where the particles collide with the reflector)
+        rotated_particle_x_dimensionless = (
+            -self.y_of_lower_reflector_edge[collided_particles_idx]
+        ) / (
+            self.y_of_upper_reflector_edge[collided_particles_idx]
+            - self.y_of_lower_reflector_edge[collided_particles_idx]
+        )
+        displaced_rotated_particle_x = (
+            rotated_particle_x_dimensionless
+            * (
+                self.x_of_upper_reflector_edge[collided_particles_idx]
+                - self.x_of_lower_reflector_edge[collided_particles_idx]
+            )
+            + self.x_of_lower_reflector_edge[collided_particles_idx]
+        )
+        displaced_rotated_particle_y = np.zeros_like(particles_angles)
+
+        # rotate the coordinates back to their original orientation
+        particle_displacement_relative_to_original_position = np.sqrt(
+            displaced_rotated_particle_x ** 2 + displaced_rotated_particle_y ** 2
+        )
+        displaced_x_new = particle_displacement_relative_to_original_position * np.cos(
+            particles_angles
+        )
+        displaced_y_new = particle_displacement_relative_to_original_position * np.sin(
+            particles_angles
+        )
+
+        # add back the displacemet that was initially subtracted
+        x_new = displaced_x_new + particles_x
+        y_new = displaced_y_new + particles_y
+
+        return x_new, y_new
+
+    def _calc_new_angle(
+        self, particles_angles: np.ndarray, collided_particles_idx: np.ndarray
+    ) -> np.ndarray:
+        rotated_particle_angle_after_reflection = (
+            2 * self.relative_reflector_angle_wrt_particles[collided_particles_idx]
+        )
+
+        # rotate back the angle
+        angle_new = rotated_particle_angle_after_reflection + particles_angles
+        angle_new = np.mod(angle_new, 2 * PI)
+        return angle_new
+
+    def _calc_displacement_distance_and_angle(
+        self, particles_x: np.ndarray, particles_y: np.ndarray
+    ) -> None:
         x_displacement_from_particles = self.x - particles_x
         y_displacement_from_particles = self.y - particles_y
         self.displacement_distance_from_particles = np.sqrt(
@@ -40,83 +144,46 @@ class Reflector:
             y_displacement_from_particles, x_displacement_from_particles
         )
 
-        # rotate system with resepct to each particle angle
+        # return displacement_distance_from_particles, displacement_angle_from_particles
+
+    def _calc_rotated_angles(self, particles_angles: np.ndarray) -> None:
         self.relative_displacement_angle_wrt_particles = (
             self.displacement_angle_from_particles - particles_angles
         )
         self.relative_reflector_angle_wrt_particles = self.angle - particles_angles
 
-        # calculate the y coordinates of the upper and lower edges of the reflectors - after rotation
-        reflector_height_after_rotation = self.L * np.sin(
+    def _calc_positions_of_rotated_reflector_edges(
+        self,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+
+        # calculate the relative heights and widths after rotation
+        self.reflector_height_after_rotation = self.L * np.sin(
             self.relative_reflector_angle_wrt_particles
         )
-        displacement_height_after_rotation = (
+        self.displacement_height_after_rotation = (
             self.displacement_distance_from_particles
             * np.sin(self.relative_displacement_angle_wrt_particles)
         )
-        y_of_upper_reflector_edge = (
-            displacement_height_after_rotation + reflector_height_after_rotation
+        self.reflector_width_after_rotation = self.L * np.cos(
+            self.relative_reflector_angle_wrt_particles
         )
-        y_of_lower_reflector_edge = (
-            displacement_height_after_rotation - reflector_height_after_rotation
+        self.displacement_width_after_rotation = (
+            self.displacement_distance_from_particles
+            * np.cos(self.relative_displacement_angle_wrt_particles)
         )
 
-        # check if the reflector intercepts the positive x half-plane
-        # since we rotated the system such that each particle is moving in the +x direction AND centered it in (0,0)
-        # if the reflector intercepts the positive x half-plane, this means the particle will intercept it
-        reflector_intercepts_positive_x_plane = np.logical_and(
-            (y_of_upper_reflector_edge > 0), (y_of_lower_reflector_edge < 0)
+        # calculate the coordinates of the upper and lower edges of the reflector
+        self.x_of_upper_reflector_edge = (
+            self.displacement_width_after_rotation + self.reflector_width_after_rotation
         )
-        particle_collisions = reflector_intercepts_positive_x_plane.astype(int)
-
-        # reflector_intercepts_positivle_x_plane = np.sign(y_of_upper_reflector_edge) != np.sign(y_of_lower_reflector_edge)
-
-        # furthest_y_of_reflector_wrt_particles = self.R * np.sin(self.dtheta_cm) + self.L * np.sin(np.sin(self.dtheta_r)
-        # nearest_y_of_reflector_wrt_particles = self.R * np.sin(self.dtheta_cm) + self.L * np.sin(self.dtheta_r)
-
-        # # self.R * np.sin(self.dtheta_cm) + y_height_after_rotation > 0
-        # # self.R * np.sin(self.dtheta_cm) - y_height_after_rotation < 0
-
-        # will_intercept = (
-        #     np.abs(
-        #         self.R * np.sin(self.dtheta_cm),
-        #     )
-        #     < np.abs(self.L * np.sin(self.dtheta_r))
-        # )
-        # particle_collisions = np.logical_and(
-        #     positive_x_direction_after_rotation,
-        #     will_intercept,
-        # ).astype(int)
-        return particle_collisions
-
-    def get_new_coordinates(self, particle_coordinates, particle_collisions):
-
-        # get only the indicies and angles for the particles which collided with this reflector
-        collided_particles_idx = np.nonzero(particle_collisions)[0]
-        new_particle_coordinates = np.copy(particle_coordinates)
-        if len(collided_particles_idx) > 0:
-            theta_p = particle_coordinates[collided_particles_idx, 2]
-
-            # calc factor from center, where the particle will hit
-            k = (
-                self.R[collided_particles_idx]
-                * np.sin(self.dtheta_cm[collided_particles_idx])
-            ) / (self.L * np.sin(self.dtheta_r[collided_particles_idx]))
-
-            # calc the new coordinates for x and y
-            x_new = self.x + k * self.L * np.cos(self.angle) / 2
-            y_new = self.y + k * self.L * np.sin(self.angle) / 2
-            # theta_p_new = -(2 * self.angle + theta_p)
-            theta_p_new = 0
-            theta_p_new = np.mod(theta_p_new, 2 * PI)
-
-            # # add small pertubations of the coordinates so that the particle doesn't hit the reflector again
-            x_new = x_new + EPS * np.cos(theta_p_new)
-            y_new = y_new + EPS * np.sin(theta_p_new)
-
-            # set new particle coordinates
-            new_particle_coordinates[collided_particles_idx, 0] = x_new
-            new_particle_coordinates[collided_particles_idx, 1] = y_new
-            new_particle_coordinates[collided_particles_idx, 2] = theta_p_new
-
-        return new_particle_coordinates
+        self.x_of_lower_reflector_edge = (
+            self.displacement_width_after_rotation - self.reflector_width_after_rotation
+        )
+        self.y_of_upper_reflector_edge = (
+            self.displacement_height_after_rotation
+            + self.reflector_height_after_rotation
+        )
+        self.y_of_lower_reflector_edge = (
+            self.displacement_height_after_rotation
+            - self.reflector_height_after_rotation
+        )

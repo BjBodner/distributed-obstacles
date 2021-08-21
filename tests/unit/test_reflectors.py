@@ -37,11 +37,11 @@ near_misses_but_hit = (
     1.0,
     np.array([0, 0, PI / 2]),
     np.array([1, 1]),
-    np.array([[0.0, 0.99, 3 * PI / 4], [0.0, -0.99, -5 * PI / 4]]),
+    np.array([[0.0, 0.99, 3 * PI / 4], [0.0, -0.99, 5 * PI / 4]]),
 )
 
 hit = (
-    np.array([[-1.0, 0, PI / 6], [-1.0, 0, -PI / 6]]),
+    np.array([[-np.sqrt(3) / 2, 0, PI / 6], [-np.sqrt(3) / 2, 0, -PI / 6]]),
     1.0,
     np.array([0, 0, PI / 2]),
     np.array([1, 1]),
@@ -93,19 +93,4 @@ def test_correct_collision_coordinates(
         particle_coordinates, particle_collisions
     )
 
-    np.testing.assert_equal(new_coordinates, expected_new_coordinates)
-
-
-if __name__ == "__main__":
-
-    # for particle_coordinates, length, reflector_coordinates, expected_collisions in zip(
-    #     particle_coordinates_options,
-    #     length_options,
-    #     reflector_coordinates_options,
-    #     expected_collisions_options,
-    # ):
-    #     test_correct_collisions(particle_coordinates, length, reflector_coordinates, expected_collisions)
-    #     a = 1
-
-    test_correct_collision_coordinates(*straight_collision_and_clear_miss)
-    test_reflector_instantiation()
+    np.testing.assert_allclose(new_coordinates, expected_new_coordinates, atol=10 ** -5)
