@@ -15,16 +15,17 @@ SEED = 0
 
 
 def create_system(
+    initial_angle,
     box_width,
     box_height,
-    particle_width,
-    particle_height,
-    initial_angle,
-    angle_amplitude,
-    num_particles,
 ):
     random.seed(SEED)
     np.random.seed(SEED)
+
+    num_particles = 10
+    particle_width = 3
+    particle_height = 3
+    angle_amplitude = 0.1
 
     # generate box
     box_boundry = BoxBoundry(box_width, box_height)
@@ -59,30 +60,18 @@ def test_instantiation():
     assert isinstance(box_boundry, BoxBoundry)
 
 
-def test_x_boundry_reached():
+def test_x_boundry_collisions_are_valid():
 
+    initial_angle = 0.0
     box_width = 4.0
     box_height = 4.0
-    num_particles = 10
-    particle_width = 3
-    particle_height = 3
-    initial_angle = 0.0
-    angle_amplitude = 0.1
 
     (
         box_boundry,
         particle_coordinates,
         non_collided_particle_indices,
         reflector_collided_particles_indices,
-    ) = create_system(
-        box_width,
-        box_height,
-        particle_width,
-        particle_height,
-        initial_angle,
-        angle_amplitude,
-        num_particles,
-    )
+    ) = create_system(initial_angle, box_width, box_height)
 
     # find collisions with boundry
     (
@@ -93,14 +82,32 @@ def test_x_boundry_reached():
         particle_coordinates, non_collided_particle_indices
     )
 
-    # either x or y collision occured for all relevant indices
-    assert np.all(np.logical_or(valid_x_boundry_collision, valid_y_boundry_collision))
+    assert np.all(
+        np.logical_or(valid_x_boundry_collision, valid_y_boundry_collision)
+    )  # either x or y collision occured for all relevant indices
+    assert np.all(
+        valid_x_boundry_collision != valid_y_boundry_collision
+    )  # no x AND y collisions occured
+    assert np.all(valid_x_boundry_collision)  # assert only x collisions occured
 
-    # no x AND y collisions occured
-    assert np.all(valid_x_boundry_collision != valid_y_boundry_collision)
 
-    # assert only x collisions occured
-    assert np.all(valid_x_boundry_collision)
+def test_x_boundry_collisions_have_correct_coordinates():
+
+    initial_angle = 0.0
+    box_width = 4.0
+    box_height = 4.0
+
+    (
+        box_boundry,
+        particle_coordinates,
+        non_collided_particle_indices,
+        reflector_collided_particles_indices,
+    ) = create_system(initial_angle, box_width, box_height)
+
+    # find collisions with boundry
+    (new_particle_coordinates, _, _,) = box_boundry.get_final_coordinates(
+        particle_coordinates, non_collided_particle_indices
+    )
 
     # check coordinates of boundry collision particles
     x_coordinates = new_particle_coordinates[non_collided_particle_indices, 0]
@@ -115,47 +122,54 @@ def test_x_boundry_reached():
     )
 
 
-def test_y_boundry_reached():
+def test_y_boundry_collisions_are_valid():
+
+    initial_angle = np.pi / 2
     box_width = 4.0
     box_height = 4.0
-    num_particles = 10
-    particle_width = 3
-    particle_height = 3
-    initial_angle = np.pi / 2
-    angle_amplitude = 0.1
 
     (
         box_boundry,
         particle_coordinates,
         non_collided_particle_indices,
         reflector_collided_particles_indices,
-    ) = create_system(
-        box_width,
-        box_height,
-        particle_width,
-        particle_height,
-        initial_angle,
-        angle_amplitude,
-        num_particles,
-    )
+    ) = create_system(initial_angle, box_width, box_height)
 
     # find collisions with boundry
     (
-        new_particle_coordinates,
+        _,
         valid_x_boundry_collision,
         valid_y_boundry_collision,
     ) = box_boundry.get_final_coordinates(
         particle_coordinates, non_collided_particle_indices
     )
 
-    # either x or y collision occured for all relevant indices
-    assert np.all(np.logical_or(valid_x_boundry_collision, valid_y_boundry_collision))
+    assert np.all(
+        np.logical_or(valid_x_boundry_collision, valid_y_boundry_collision)
+    )  # either x or y collision occured for all relevant indices
+    assert np.all(
+        valid_x_boundry_collision != valid_y_boundry_collision
+    )  # no x AND y collisions occured
+    assert np.all(valid_y_boundry_collision)  # assert only y collisions occured
 
-    # no x AND y collisions occured
-    assert np.all(valid_x_boundry_collision != valid_y_boundry_collision)
 
-    # assert only y collisions occured
-    assert np.all(valid_y_boundry_collision)
+def test_y_boundry_collisions_have_correct_coordinates():
+
+    initial_angle = np.pi / 2
+    box_width = 4.0
+    box_height = 4.0
+
+    (
+        box_boundry,
+        particle_coordinates,
+        non_collided_particle_indices,
+        reflector_collided_particles_indices,
+    ) = create_system(initial_angle, box_width, box_height)
+
+    # find collisions with boundry
+    (new_particle_coordinates, _, _,) = box_boundry.get_final_coordinates(
+        particle_coordinates, non_collided_particle_indices
+    )
 
     x_coordinates = new_particle_coordinates[non_collided_particle_indices, 0]
     y_coordinates = new_particle_coordinates[non_collided_particle_indices, 1]
@@ -171,5 +185,7 @@ def test_y_boundry_reached():
 
 if __name__ == "__main__":
     test_instantiation()
-    test_x_boundry_reached()
-    test_y_boundry_reached()
+    test_x_boundry_collisions_are_valid()
+    test_x_boundry_collisions_have_correct_coordinates()
+    test_y_boundry_collisions_are_valid()
+    test_x_boundry_collisions_have_correct_coordinates()
