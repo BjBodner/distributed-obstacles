@@ -16,7 +16,45 @@ class BoxBoundry:
         self._check_inputs(height, width)
         self.height = height
         self.width = width
+        self.x_range = [-width / 2, width / 2]
+        self.y_range = [-width / 2, width / 2]
         self.max_radius = np.sqrt(height ** 2 + width ** 2)
+
+    def get_final_coordinates(
+        self,
+        particles_coordinates: np.ndarray,
+        non_collided_particle_indices: np.ndarray,
+    ):
+
+        new_particle_coordinates = np.copy(particles_coordinates)
+        non_collided_particles_coordinates = particles_coordinates[
+            non_collided_particle_indices, :
+        ]
+
+        # calculates coordinates in cases of x and y collisions
+        # all particles that did not collide with reflectors are expected to reach the boundry
+        (
+            x_collision_coordinates,
+            valid_x_boundry_collision,
+        ) = self._calc_x_collision_coordinates(non_collided_particles_coordinates)
+        (
+            y_collision_coordinates,
+            valid_y_boundry_collision,
+        ) = self._calc_y_collision_coordinates(non_collided_particles_coordinates)
+
+        # replace the x,y coordinates of the
+        new_particle_coordinates[non_collided_particle_indices, :2] = (
+            x_collision_coordinates + y_collision_coordinates
+        )
+
+        return (
+            new_particle_coordinates,
+            valid_x_boundry_collision,
+            valid_y_boundry_collision,
+        )
+
+    def get_ranges(self):
+        return self.x_range, self.y_range
 
     def _check_inputs(self, height: float, width: float) -> None:
         # check inputs
@@ -100,36 +138,3 @@ class BoxBoundry:
         y_collision_coordinates = y_collision_coordinates * valid_y_boundry_collision
 
         return y_collision_coordinates, valid_y_boundry_collision
-
-    def get_final_coordinates(
-        self,
-        particles_coordinates: np.ndarray,
-        non_collided_particle_indices: np.ndarray,
-    ):
-
-        new_particle_coordinates = np.copy(particles_coordinates)
-        non_collided_particles_coordinates = particles_coordinates[
-            non_collided_particle_indices, :
-        ]
-
-        # calculates coordinates in cases of x and y collisions
-        # all particles that did not collide with reflectors are expected to reach the boundry
-        (
-            x_collision_coordinates,
-            valid_x_boundry_collision,
-        ) = self._calc_x_collision_coordinates(non_collided_particles_coordinates)
-        (
-            y_collision_coordinates,
-            valid_y_boundry_collision,
-        ) = self._calc_y_collision_coordinates(non_collided_particles_coordinates)
-
-        # replace the x,y coordinates of the
-        new_particle_coordinates[non_collided_particle_indices, :2] = (
-            x_collision_coordinates + y_collision_coordinates
-        )
-
-        return (
-            new_particle_coordinates,
-            valid_x_boundry_collision,
-            valid_y_boundry_collision,
-        )

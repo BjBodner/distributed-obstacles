@@ -5,11 +5,49 @@ from typing import Tuple
 
 import numpy as np
 
-# from cma import fmin
 from .utils import parse_coordinates
 
 EPS = 10 ** -5
 PI = np.pi
+
+
+def get_reflectors(
+    x_range,
+    y_range,
+    reflector_position_amplitudes: list,
+    reflector_length: float,
+    num_reflectors: int,
+    random_state: int,
+) -> list:
+    if random_state is not None:
+        np.random.seed(random_state)
+
+    # calculate maximal allowed values for the
+    x_allowed_values = [x_range[0] + reflector_length, x_range[1] - reflector_length]
+    y_allowed_values = [y_range[0] + reflector_length, y_range[1] - reflector_length]
+
+    # y_boundry
+
+    reflectors = []
+    for i in range(num_reflectors):
+
+        # define the coordinates for each selector
+        reflector_coordinates = np.zeros(3)
+        reflector_coordinates[0] = (
+            reflector_position_amplitudes[0] * 2 * (np.random.rand(1) - 0.5)
+        )
+        reflector_coordinates[0] = np.clip(reflector_coordinates[0], *x_allowed_values)
+        reflector_coordinates[1] = (
+            reflector_position_amplitudes[1] * 2 * (np.random.rand(1) - 0.5)
+        )
+        reflector_coordinates[1] = np.clip(reflector_coordinates[1], *y_allowed_values)
+        reflector_coordinates[2] = np.mod(
+            reflector_position_amplitudes[2] * np.random.rand(1), PI
+        )
+
+        # instantiate reflector and add to reflector list
+        reflectors.append(Reflector(reflector_length, reflector_coordinates))
+    return reflectors
 
 
 class Reflector:
